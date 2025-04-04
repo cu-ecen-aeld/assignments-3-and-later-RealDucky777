@@ -1,4 +1,8 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/wait.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,7 +20,9 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
+    if (system(cmd) == -1) {
+        return false;
+    }
     return true;
 }
 
@@ -58,10 +64,20 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t process = fork();
+    int stat_loc;
+    if (process == -1)
+        return false;
+    if (process == 0) {
+        execv(command[0], command);
+        exit(1);
+    }
+    if (wait(&stat_loc) == -1)
+        return false;
 
     va_end(args);
 
-    return true;
+    return !WEXITSTATUS(stat_loc);
 }
 
 /**
@@ -92,8 +108,25 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int fd = open(outputfile, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+    pid_t process = fork();
+    int stat_loc;
+
+    if (process == -1)
+        return false;
+    if (process == 0) {
+        if (dup2(fd, 1) >= 0) {
+            close(fd);
+                execv(command[0], command);
+        }
+        exit(1);
+    } else {
+        close(fd);
+    }
+    if (wait(&stat_loc) == -1)
+        return false;
 
     va_end(args);
 
-    return true;
+    return !WEXITSTATUS(stat_loc);
 }
